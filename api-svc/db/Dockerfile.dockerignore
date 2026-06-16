@@ -1,0 +1,15 @@
+.git
+.gradle
+**/.gradle
+**/build
+**/node_modules
+.claude
+.github
+.vscode
+doc
+documentation
+k8s
+postman
+raid-agency-app
+raid-agency-app-static
+sso
