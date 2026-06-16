@@ -1,0 +1,82 @@
+name: Build and Push Container Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set image tags
+        shell: bash
+        run: |
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            IMAGE_TAG="${GITHUB_REF_NAME}"
+          else
+            IMAGE_TAG="sha-${SHORT_SHA}"
+          fi
+
+          echo "OWNER_LC=${OWNER_LC}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build and test Gradle projects
+        run: ./gradlew build --no-daemon
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push raid-api image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.OWNER_LC }}/raid-api:${{ env.IMAGE_TAG }}"
+          ./gradlew :api-svc:raid-api:buildDocker -PimageName="${IMAGE}" --no-daemon
+          docker push "${IMAGE}"
+
+      - name: Build and push raid-iam image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.OWNER_LC }}/raid-iam:${{ env.IMAGE_TAG }}"
+          docker build -f iam/Dockerfile -t "${IMAGE}" iam
+          docker push "${IMAGE}"
+
+      - name: Build and push raid-agency-app image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.OWNER_LC }}/raid-agency-app:${{ env.IMAGE_TAG }}"
+          docker build -f raid-agency-app/Dockerfile -t "${IMAGE}" raid-agency-app
+          docker push "${IMAGE}"
+
+      - name: Build and push raid-api-db-migration image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.OWNER_LC }}/raid-api-db-migration:${{ env.IMAGE_TAG }}"
+          docker build -f api-svc/db/Dockerfile --ignorefile api-svc/db/Dockerfile.dockerignore -t "${IMAGE}" .
+          docker push "${IMAGE}"
