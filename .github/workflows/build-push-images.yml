@@ -78,5 +78,5 @@ jobs:
       - name: Build and push raid-api-db-migration image
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.OWNER_LC }}/raid-api-db-migration:${{ env.IMAGE_TAG }}"
-          docker build -f api-svc/db/Dockerfile --ignorefile api-svc/db/Dockerfile.dockerignore -t "${IMAGE}" .
+          docker build -f api-svc/db/Dockerfile -t "${IMAGE}" .
           docker push "${IMAGE}"
