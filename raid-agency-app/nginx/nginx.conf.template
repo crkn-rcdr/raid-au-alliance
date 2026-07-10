@@ -5,7 +5,7 @@
 # For plain volume-mount deployments, use nginx.conf directly — no template needed.
 
 server {
-    listen 80;
+    listen 8080;
     root /usr/share/nginx/html;
     index index.html;
 
