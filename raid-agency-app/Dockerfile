@@ -19,5 +19,5 @@ RUN chmod +x /docker-entrypoint.sh \
     && chgrp -R 0 /var/cache/nginx /var/run /var/log/nginx /etc/nginx/conf.d /usr/share/nginx/html \
     && chmod -R g=u /var/cache/nginx /var/run /var/log/nginx /etc/nginx/conf.d /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
 ENTRYPOINT ["/docker-entrypoint.sh"]
