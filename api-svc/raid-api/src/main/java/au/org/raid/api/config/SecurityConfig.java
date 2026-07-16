@@ -41,9 +41,6 @@ public class SecurityConfig {
         public static final String REALM_ACCESS_CLAIM = "realm_access";
         public static final String ROLES_CLAIM = "roles";
         public static final String GROUPS = "groups";
-        public static final String ADMIN_RAIDS_CLAIM = "admin_raids";
-        public static final String USER_RAIDS_CLAIM = "user_raids";
-
         // Roles
         public static final String RAID_USER_ROLE = "raid-user";
         public static final String RAID_DUMPER_ROLE = "raid-dumper";
@@ -54,6 +51,10 @@ public class SecurityConfig {
         public static final String CONTRIBUTOR_WRITER_ROLE = "contributor-writer";
         public static final String RAID_UPGRADER_ROLE = "raid-upgrader";
         public static final String RAID_ACCESS_HANDLER_ROLE = "raid-access-handler";
+        // Prefix for scoped realm roles of the form "service-point-admin:<groupId>", where
+        // groupId is the Keycloak group UUID (see RAID-712). Not yet wired into any endpoint's
+        // authorization rules; consumed by later RAID-712 work.
+        public static final String SERVICE_POINT_ADMIN_ROLE_PREFIX = "service-point-admin";
 
         // API paths
         public static final String RAID_API = "/raid";
@@ -104,7 +105,7 @@ public class SecurityConfig {
                 // Service Point API endpoints
                 .requestMatchers(PUT, SERVICE_POINT_API + "/**").hasRole(OPERATOR_ROLE)
                 .requestMatchers(POST, SERVICE_POINT_API + "/**").hasRole(OPERATOR_ROLE)
-                .requestMatchers(GET, SERVICE_POINT_API + "/**").hasAnyRole(SERVICE_POINT_USER_ROLE, OPERATOR_ROLE)
+                .requestMatchers(GET, SERVICE_POINT_API + "/**").hasAnyRole(SERVICE_POINT_USER_ROLE, OPERATOR_ROLE, RAID_DUMPER_ROLE)
 
                 // Admin endpoints
                 .requestMatchers(POST, "/admin/**").hasRole(OPERATOR_ROLE)
