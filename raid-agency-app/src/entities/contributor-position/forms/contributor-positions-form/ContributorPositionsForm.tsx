@@ -47,11 +47,17 @@ export function ContributorPositionsForm({
     name: `${parentKey}.${parentIndex}.${key}`,
   });
 
+  const { formState, watch, getValues } = useFormContext<RaidDto>();
+
   const handleAddItem = () => {
-    append(generator());
+    append(
+      generator(
+        getValues("date.startDate") || undefined,
+        getValues("date.endDate") || undefined
+      )
+    );
     trigger(`${parentKey}.${parentIndex}.${key}`);
   };
-  const { formState, watch } = useFormContext<RaidDto>();
   const positions = watch([`${parentKey}.${parentIndex}.${key}`]) as ContributorPosition[][];
   const isDirty = formState.isDirty;
 
@@ -98,7 +104,6 @@ export function ContributorPositionsForm({
           onClick={handleAddItem}
           onMouseEnter={() => setIsRowHighlighted(true)}
           onMouseLeave={() => setIsRowHighlighted(false)}
-          disabled={useEnableAddFields(positions as unknown as SubSections, isDirty)}
         >
           Add {label}
         </Button>

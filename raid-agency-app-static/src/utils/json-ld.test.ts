@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildResearchProjectJsonLd } from "./json-ld";
 import type { RaidDto } from "@/generated/raid";
 
+const PRIMARY_TITLE_TYPE = "https://vocabulary.raid.org/title.type.schema/5";
 const PRIMARY_DESCRIPTION_TYPE = "https://vocabulary.raid.org/description.type.schema/318";
 const FUNDER_ORGANISATION_ROLE = "https://vocabulary.raid.org/organisation.role.schema/186";
 
@@ -41,7 +42,7 @@ describe("buildResearchProjectJsonLd", () => {
     raid.title = [
       {
         text: "Researching the lived experience of First Nations Peoples",
-        type: { id: "https://vocabulary.raid.org/title.type.schema/5", schemaUri: "" },
+        type: { id: PRIMARY_TITLE_TYPE, schemaUri: "" },
         startDate: "2025-01-01",
         language: { id: "eng", schemaUri: "https://www.iso.org/standard/74575.html" },
       },
@@ -50,6 +51,41 @@ describe("buildResearchProjectJsonLd", () => {
     const result = buildResearchProjectJsonLd(raid);
     expect(result.name).toBe("Researching the lived experience of First Nations Peoples");
     expect(result.headline).toBe("Researching the lived experience of First Nations Peoples");
+  });
+
+  it("joins all titles with pipe separator in name, uses primary for headline", () => {
+    const raid = minimalRaid();
+    raid.title = [
+      {
+        text: "Alternative name",
+        type: { id: "https://vocabulary.raid.org/title.type.schema/4", schemaUri: "" },
+        startDate: "2025-01-01",
+      },
+      {
+        text: "Primary name",
+        type: { id: PRIMARY_TITLE_TYPE, schemaUri: "" },
+        startDate: "2025-01-01",
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result.name).toBe("Alternative name | Primary name");
+    expect(result.headline).toBe("Primary name");
+  });
+
+  it("falls back to first title for headline when no primary title exists", () => {
+    const raid = minimalRaid();
+    raid.title = [
+      {
+        text: "Alternative name",
+        type: { id: "https://vocabulary.raid.org/title.type.schema/4", schemaUri: "" },
+        startDate: "2025-01-01",
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result.name).toBe("Alternative name");
+    expect(result.headline).toBe("Alternative name");
   });
 
   it("defaults name and headline to empty string when no title", () => {
@@ -296,5 +332,167 @@ describe("buildResearchProjectJsonLd", () => {
     expect(result.member).toEqual([]);
     expect(result.funder).toEqual([]);
     expect(result.knowsAbout).toEqual([]);
+    expect(result).not.toHaveProperty("isPartOf");
+    expect(result).not.toHaveProperty("hasPart");
+    expect(result).not.toHaveProperty("isBasedOn");
+    expect(result).not.toHaveProperty("isRelatedTo");
+  });
+
+  it("maps IsPartOf related raid to isPartOf", () => {
+    const raid = minimalRaid();
+    raid.relatedRaid = [
+      {
+        id: "https://raid.org/10.71821/a945d761",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/202",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result.isPartOf).toEqual([
+      {
+        "@type": "ResearchProject",
+        "@id": "https://raid.org/10.71821/a945d761",
+        identifier: "https://raid.org/10.71821/a945d761",
+      },
+    ]);
+    expect(result).not.toHaveProperty("hasPart");
+    expect(result).not.toHaveProperty("isBasedOn");
+    expect(result).not.toHaveProperty("isRelatedTo");
+  });
+
+  it("maps HasPart related raid to hasPart", () => {
+    const raid = minimalRaid();
+    raid.relatedRaid = [
+      {
+        id: "https://raid.org/10.71821/23fcbc6f",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/201",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result.hasPart).toEqual([
+      {
+        "@type": "ResearchProject",
+        "@id": "https://raid.org/10.71821/23fcbc6f",
+        identifier: "https://raid.org/10.71821/23fcbc6f",
+      },
+    ]);
+  });
+
+  it("maps IsDerivedFrom related raid to isBasedOn", () => {
+    const raid = minimalRaid();
+    raid.relatedRaid = [
+      {
+        id: "https://raid.org/10.26259/abcd1234",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/200",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result.isBasedOn).toEqual([
+      {
+        "@type": "ResearchProject",
+        "@id": "https://raid.org/10.26259/abcd1234",
+        identifier: "https://raid.org/10.26259/abcd1234",
+      },
+    ]);
+  });
+
+  it("maps other relationship types to isRelatedTo with relationshipType", () => {
+    const raid = minimalRaid();
+    raid.relatedRaid = [
+      {
+        id: "https://raid.org/10.26259/efgh5678",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/204",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result.isRelatedTo).toEqual([
+      {
+        "@type": "ResearchProject",
+        "@id": "https://raid.org/10.26259/efgh5678",
+        identifier: "https://raid.org/10.26259/efgh5678",
+        relationshipType: "https://vocabulary.raid.org/relatedRaid.type.schema/204",
+      },
+    ]);
+  });
+
+  it("groups multiple related raids under correct properties", () => {
+    const raid = minimalRaid();
+    raid.relatedRaid = [
+      {
+        id: "https://raid.org/10.71821/a945d761",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/202",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+      {
+        id: "https://raid.org/10.71821/bbb11111",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/202",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+      {
+        id: "https://raid.org/10.26259/child1234",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/201",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+      {
+        id: "https://raid.org/10.26259/cont5678",
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/204",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result.isPartOf).toHaveLength(2);
+    expect(result.hasPart).toHaveLength(1);
+    expect(result.isRelatedTo).toHaveLength(1);
+    expect(result).not.toHaveProperty("isBasedOn");
+  });
+
+  it("skips related raids without an id", () => {
+    const raid = minimalRaid();
+    raid.relatedRaid = [
+      {
+        type: {
+          id: "https://vocabulary.raid.org/relatedRaid.type.schema/202",
+          schemaUri: "https://vocabulary.raid.org/relatedRaid.type.schema",
+        },
+      },
+    ];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result).not.toHaveProperty("isPartOf");
+  });
+
+  it("omits relationship properties when relatedRaid is empty", () => {
+    const raid = minimalRaid();
+    raid.relatedRaid = [];
+
+    const result = buildResearchProjectJsonLd(raid);
+    expect(result).not.toHaveProperty("isPartOf");
+    expect(result).not.toHaveProperty("hasPart");
+    expect(result).not.toHaveProperty("isBasedOn");
+    expect(result).not.toHaveProperty("isRelatedTo");
   });
 });

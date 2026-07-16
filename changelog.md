@@ -1,6 +1,149 @@
 See the [Changelog audience](#changelog-audience) section for info about
  the expected audience and content of the changelog.
 
+# 2.14.0
+
+## API
+* Withdrew the `traditionalKnowledgeLabel` field pending co-design with Indigenous communities.
+  The field has been removed from the RAiD schema and API specifications. Mint and update requests
+  that include `traditionalKnowledgeLabel` are now rejected with a `400 Bad Request` and a standard
+  validation error, instead of being silently accepted as before. The field was never rendered or
+  persisted, so no existing data is affected; the underlying database tables are retained (PR #568).
+
+# 2.13.0
+
+> Note: This release scopes the service point admin role to a single service point but keeps the
+> existing flat behaviour as a fallback, so there is no functional change for users yet. After
+> deploying to test, stage or prod, an operator must run the one-off backfill endpoint (see IAM
+> below) to grant the new scoped roles.
+
+## IAM
+* Introduced scoped service point admin roles. A user's admin authority is now scoped to a single
+  service point, replacing the previous role that made a user an admin of every service point they
+  belonged to. The scoped role is created, granted and revoked alongside the existing role, so
+  behaviour is unchanged while both are maintained. A fallback flag keeps the previous behaviour in
+  effect until the app consumes the scoped roles (PRs #551, #553).
+* Added an operator-only, idempotent backfill endpoint,
+  `POST /realms/raid/group/migrate-service-point-admins`, that grants the scoped roles to existing
+  group admins. It is safe to re-run (PR #556).
+* Seeded scoped roles for the dev-realm groups and added role-permissions documentation (PR #552).
+
+## API
+* Added support for the scoped service point admin authorisation model. The change is additive and
+  not yet wired into any endpoint, so there is no behaviour change yet (PR #554).
+
+# 2.12.0
+
+## API
+* RAiD permissions are now resolved on demand instead of being carried in the access token. The
+  permissions API returns the caller's `userRaids` and `adminRaids` as lists, replacing the previous
+  per-RAiD boolean claim. This stops the access token growing with each RAiD a user administers,
+  which had been pushing request headers past the server's size limit (RAID-617, PR #550).
+* The `raid-dumper` role can now read `GET /service-point/` (RAID-733, PR #561).
+
+## App-client UI
+* Reworked the service point notification experience -- pending service point requests now surface
+  in a drawer instead of a popover, with corrected labels and layout fixes (RAID-403, PR #549).
+
+## IAM
+* The `raid` realm no longer emits the `admin_raids` access-token claim. A new Keycloak SPI endpoint,
+  `GET /permissions`, returns a user's `userRaids` and `adminRaids` from their stored attributes, so
+  the token stays small regardless of how many RAiDs the user can administer (RAID-617, PR #550).
+
+## Static Landing Pages
+* Added caching with a TTL for ORCID, ROR and service point lookups during the static site data
+  fetch, reducing repeated external API calls on rebuilds (RAID-709, PR #546).
+* Reworked access-token handling in the data-fetch scripts with a dedicated token manager that
+  refreshes the token before it expires, corrected the citation-failed and cache counts, and removed
+  the legacy shell fetch scripts in favour of the Node scripts (RAID-710, PR #555).
+
+# 2.11.2
+
+## API
+* `postToDatacite` endpoint now accepts a `RaidUpdateRequest` body and returns `204 No Content`,
+  replacing the previous full `RaidDto` request/response (RAID-610, PR #545).
+
+# 2.11.1
+
+## API
+* DataCite errors are no longer swallowed -- `DataciteService` re-throws `HttpClientErrorException`
+  so upstream DataCite failures propagate to the caller instead of failing silently
+  (RAID-609, PR #447).
+
+## App-client UI
+* Fixed service point create and update form validation, resolving a defect where the ROR field's
+  React Hook Form state and local component state drifted out of sync (RAID-480, PR #542).
+* ROR iDs are now validated and trimmed of surrounding whitespace on entry (PR #542).
+* Service points with an empty or invalid group ID are now handled gracefully instead of erroring,
+  and organisation role end dates default to the RAiD's end date (RAID-659, PR #535).
+* Removed the end-date validation on contributor positions and organisation roles, and made the
+  ORCID placeholder and helper text configurable via `app-config` (RAID-708, PR #537).
+
+## Static Landing Pages
+* JSON-LD now prefers the primary title type for the schema.org `name` field and includes all
+  titles (RAID-707, PRs #541, #544).
+* Related RAiD relationships are now mapped to schema.org properties in JSON-LD (RAID-706, PR #531).
+
+# 2.11.0
+
+## API
+* Description `text` field now accepts line breaks -- changed the validation pattern from
+  `^\s*\S.*$` to `^\s*\S[\s\S]*$` so that multi-line content is no longer rejected
+  (RAID-704, PR #534).
+* `metadata.created` is now immutable on update -- the API preserves the original creation
+  timestamp instead of allowing it to be overwritten (RAID-690, PR #525).
+
+## App-client UI
+* ORCID integration uplift -- contributor widget now validates ORCID iDs and displays the
+  resolved identity after lookup (RAID-676, PR #532).
+* New date picker component integrated throughout the RAiD form, replacing raw text inputs
+  (RAID-674, PR #521).
+* Contributor start and end dates now default to the RAiD's own start and end dates.
+* Corrected "Create API key" label to "Create API token".
+
+# 2.10.1
+
+> Note: 2.10.0 was never deployed to production. Its migration of `schemaUri` fields to typed
+> enums (see below) rejected existing ANZSRC-FOR subject URIs stored with a trailing slash
+> (`.../anzsrc-for/2020/`), causing HTTP 500s on the `/raid/` list endpoint. 2.10.1 carries all
+> of the 2.10.0 changes plus the data fix below.
+
+## API
+* Normalised legacy ANZSRC-FOR subject `schemaUri` values to the canonical no-trailing-slash form
+  (`https://linked.data.gov.au/def/anzsrc-for/2020`) required by the new typed enums, via a
+  prod-only Flyway migration (V41.1). The same migration repairs subject IDs in `raid_history`
+  that an earlier prod-only fix (V40.1) corrupted with a blind text replace.
+
+# 2.10.0
+
+## App-client UI
+* Removed bulk upload limit — CSV/Excel imports are no longer capped at 100 items.
+* Title and description now display on static landing pages.
+* Localised date formatting on static landing pages.
+* Runtime `app-config` support for static landing pages, replacing build-time configuration.
+* Fixed a static pages rendering defect.
+
+## API
+* LinkML data model introduction — enum values for subjects, titles, descriptions, contributor
+  roles/positions, access types, related object types/categories, and traditional knowledge labels
+  are now generated from SPARQL queries against external vocabularies (ANZSRC, COAR, etc.) with
+  retry logic and local caching.
+* String `schemaUri` fields migrated to typed enums across all API models — replaces free-text
+  URIs with OpenAPI-generated enum types for stronger compile-time validation.
+* RDF content negotiation added — the `/raid/{prefix}/{suffix}` endpoint now serves Turtle,
+  RDF/XML, N-Triples, and JSON-LD representations via `Accept` header negotiation.
+* Fixed `access.statement` conditional validation — Jakarta `@NotNull` on the generated
+  `Statement` model caused blanket rejection before the custom validator could apply conditional
+  logic (required for Embargoed, optional for Open). Fixed by making the field optional in the
+  LinkML data model and letting the custom `AccessValidator` enforce the rule.
+* Unified Jakarta Bean Validation and custom `ValidationService` error responses — overrode
+  `handleMethodArgumentNotValid` in the exception handler to return `ValidationFailureResponse`
+  instead of Spring's default `ProblemDetail` format.
+* `OrganisationRepository.findOrCreate` made race-safe with `INSERT ... ON CONFLICT` to prevent
+  duplicate key violations under concurrent requests.
+* Null-guard in `addAdminRaid` — throws `UserNotFoundException` when Keycloak returns a null
+  user instead of propagating a NullPointerException.
+
 # 2.9.2
 
 ## Database

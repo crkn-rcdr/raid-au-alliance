@@ -62,6 +62,22 @@
       "containerId" : "aacef42c-ba11-42f6-89de-89f3c8126f00",
       "attributes" : { }
     }, {
+      "id" : "c2be718a-9063-4cf8-8073-1f45e26c4104",
+      "name" : "service-point-admin:ba0b01a6-726f-464f-b501-454a10096826",
+      "description" : "Service point admin for group ba0b01a6-726f-464f-b501-454a10096826",
+      "composite" : false,
+      "clientRole" : false,
+      "containerId" : "aacef42c-ba11-42f6-89de-89f3c8126f00",
+      "attributes" : { }
+    }, {
+      "id" : "1b4bc00a-7946-4555-a3d0-4f92d22344b5",
+      "name" : "service-point-admin:169bd3f3-dd42-4ac0-b89a-fb49648e5eff",
+      "description" : "Service point admin for group 169bd3f3-dd42-4ac0-b89a-fb49648e5eff",
+      "composite" : false,
+      "clientRole" : false,
+      "containerId" : "aacef42c-ba11-42f6-89de-89f3c8126f00",
+      "attributes" : { }
+    }, {
       "id" : "0d7699fa-e553-496a-9d18-2dcf7f60f7cd",
       "name" : "service-point-user",
       "description" : "",
@@ -600,7 +616,7 @@
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
-    "realmRoles" : [ "group-admin", "service-point-user", "default-roles-raid" ],
+    "realmRoles" : [ "group-admin", "service-point-admin:169bd3f3-dd42-4ac0-b89a-fb49648e5eff", "service-point-user", "default-roles-raid" ],
     "notBefore" : 0,
     "groups" : [ "/raid-au" ]
   }, {
@@ -669,7 +685,7 @@
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
-    "realmRoles" : [ "group-admin", "service-point-user", "default-roles-raid", "operator" ],
+    "realmRoles" : [ "group-admin", "service-point-admin:ba0b01a6-726f-464f-b501-454a10096826", "service-point-admin:169bd3f3-dd42-4ac0-b89a-fb49648e5eff", "service-point-user", "default-roles-raid", "operator" ],
     "notBefore" : 0,
     "groups" : [ "/RAiD AU Test Registry 2", "/raid-au" ]
   }, {
@@ -1003,7 +1019,7 @@
     "authenticationFlowBindingOverrides" : { },
     "fullScopeAllowed" : true,
     "nodeReRegistrationTimeout" : -1,
-    "defaultClientScopes" : [ "web-origins", "acr", "roles", "user_raids", "basic", "admin_raids", "service_point_group_id" ],
+    "defaultClientScopes" : [ "web-origins", "acr", "roles", "basic", "service_point_group_id" ],
     "optionalClientScopes" : [ ]
   }, {
     "id" : "b5ded15a-4576-4fdf-b95b-f1adf9a8de9e",
@@ -1318,35 +1334,6 @@
       "display.on.consent.screen" : "true"
     }
   }, {
-    "id" : "8c822622-53e6-4374-9091-53ea05b611d3",
-    "name" : "user_raids",
-    "description" : "",
-    "protocol" : "openid-connect",
-    "attributes" : {
-      "include.in.token.scope" : "false",
-      "display.on.consent.screen" : "true",
-      "gui.order" : "",
-      "consent.screen.text" : ""
-    },
-    "protocolMappers" : [ {
-      "id" : "8e5799f2-c755-4006-a3e1-4f4c755e3ed0",
-      "name" : "user_raids",
-      "protocol" : "openid-connect",
-      "protocolMapper" : "oidc-usermodel-attribute-mapper",
-      "consentRequired" : false,
-      "config" : {
-        "introspection.token.claim" : "true",
-        "userinfo.token.claim" : "true",
-        "multivalued" : "true",
-        "user.attribute" : "userRaids",
-        "id.token.claim" : "true",
-        "lightweight.claim" : "false",
-        "access.token.claim" : "true",
-        "claim.name" : "user_raids",
-        "jsonType.label" : "String"
-      }
-    } ]
-  }, {
     "id" : "7065ed5a-9643-4b52-a394-4c38371b7b66",
     "name" : "acr",
     "description" : "OpenID Connect scope for add acr (authentication context class reference) to the token",
@@ -1453,35 +1440,6 @@
         "access.token.claim" : "true",
         "claim.name" : "auth_time",
         "jsonType.label" : "long"
-      }
-    } ]
-  }, {
-    "id" : "29b46320-465a-44ab-8218-61796e9a6a63",
-    "name" : "admin_raids",
-    "description" : "",
-    "protocol" : "openid-connect",
-    "attributes" : {
-      "include.in.token.scope" : "false",
-      "display.on.consent.screen" : "true",
-      "gui.order" : "",
-      "consent.screen.text" : ""
-    },
-    "protocolMappers" : [ {
-      "id" : "56116218-7754-4d65-9ffd-f2713b658f0f",
-      "name" : "admin_raids",
-      "protocol" : "openid-connect",
-      "protocolMapper" : "oidc-usermodel-attribute-mapper",
-      "consentRequired" : false,
-      "config" : {
-        "introspection.token.claim" : "true",
-        "userinfo.token.claim" : "true",
-        "multivalued" : "true",
-        "user.attribute" : "adminRaids",
-        "id.token.claim" : "true",
-        "lightweight.claim" : "false",
-        "access.token.claim" : "true",
-        "claim.name" : "admin_raids",
-        "jsonType.label" : "String"
       }
     } ]
   }, {
