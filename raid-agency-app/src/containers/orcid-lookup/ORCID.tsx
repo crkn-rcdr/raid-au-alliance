@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import BadgeIcon from '@mui/icons-material/Badge';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { CircleCheckBig, ScanSearch } from 'lucide-react';
@@ -24,6 +25,8 @@ import { ClipLoader, PulseLoader } from 'react-spinners';
 import { useQueryClient } from '@tanstack/react-query';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { CustomStyledTooltip } from '@/components/tooltips/StyledTooltip';
+import { getContributorSchemaUri } from '@/utils/contributor-utils/contributor-schema-uri';
+import { detectContributorIdentifierType, ISNI_SCHEMA_URI } from '@/utils/contributor-utils/contributor-identifier';
 
 // localStorage keys
 const ORCID_CACHE_KEY = 'orcidCache';
@@ -277,7 +280,11 @@ export default function ORCIDLookup({
     defaultValue?: string;
   }) {
   const [searchMode, setSearchMode] = useState<'lookup' | 'search'>('lookup');
-  const [searchValue, setSearchValue] = useState('');
+  // Bug fix: the input never pre-filled from an existing saved id - harmless
+  // while this widget only ever rendered for brand-new (empty) contributors,
+  // but now that ISNI contributors stay editable after a status exists too,
+  // this needs to actually show the value being edited.
+  const [searchValue, setSearchValue] = useState(defaultValue || '');
   const [searchText, clearSearchText] = useState(false);
   const [dropBox, setDropBox] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -296,6 +303,9 @@ export default function ORCIDLookup({
   // Resolve display name on mount when a default ORCID value is already present (validation-only mode)
   React.useEffect(() => {
     if (mode !== 'validation-only' || !defaultValue) return;
+    // Bug fix: ISNI has no name lookup - don't fire a pointless ORCID API
+    // call with an ISNI value.
+    if (detectContributorIdentifierType(defaultValue) === 'isni') return;
     const normalised = normalizeOrcidId(defaultValue);
     fetchFromOrcidPublicApi(normalised)
       .then((data) => {
@@ -369,7 +379,7 @@ export default function ORCIDLookup({
 
   const searchConfig = {
     lookup: {
-      placeholder: orcid.placeholder || 'Enter ORCID iD (e.g., 0000-0002-1825-0097)',
+      placeholder: orcid.placeholder || 'Enter ORCID iD or ISNI (e.g., 0000-0002-1825-0097 or https://isni.org/0000000121032683)',
       endpoint: `https://${getOrcidEnv()}researchdata.ardc.edu.au/api/v2.0/orcid.jsonp/lookup/${encodeURIComponent(searchValue)}/?api_key=public&callback=?`,
       label: 'ORCID ID',
       description: 'Search by unique ORCID identifier',
@@ -390,6 +400,18 @@ export default function ORCIDLookup({
     ),
     genericPlaceholder: `You can search by full ORCID iD or by contributor name (e.g., John Smith).`
   };
+
+  // RAID-861 bug fix: the helper text and tooltip below the search bar were
+  // always ORCID-specific, even once a valid ISNI had been entered - ISNI has
+  // no name lookup, so the ORCID copy (Credit Name, visibility settings) is
+  // misleading in that state.
+  const isniHelpText = 'Enter a valid ISNI URL, e.g. https://isni.org/0000000121032683';
+  const isniTooltipTitle = 'ISNI Info';
+  const isniTooltipContent = (
+    <>ISNI (International Standard Name Identifier) is accepted here and is stored
+    exactly as entered - no name lookup is performed.
+    For more information, see <a href="https://isni.org" target="_blank" rel="noopener noreferrer">[ISNI website]</a></>
+  );
 
   const currentConfig = searchConfig[searchMode];
 
@@ -466,6 +488,13 @@ export default function ORCIDLookup({
       setIsLoading(false);
     }
   } else {
+    // validation-only mode: ISNI is a recognised, plain identifier with no
+    // lookup of its own - schemaUri is already set reactively in
+    // onChangeMode, so accept silently instead of showing the ORCID-format
+    // error below.
+    if (mode === 'validation-only' && detectContributorIdentifierType(searchValue) === 'isni') {
+      return;
+    }
     // validation-only mode: reject non-ORCID input with a format error
     if (mode === 'validation-only') {
       setError(getErrorMessage(400));
@@ -509,7 +538,12 @@ export default function ORCIDLookup({
     const value = (event.target as HTMLInputElement).value || '';
     setSearchValue(value);
     setVerifiedORCID(value === '' && false);
-    formMethods?.setValue?.(fieldName, value);
+    // Bug fix: this setValue call previously omitted shouldValidate, so a
+    // stale validation error on the id field never cleared as the user
+    // typed a corrected value - for ORCID it happened to clear anyway once
+    // a result was selected (selectOrcid does pass shouldValidate), but
+    // ISNI has no such follow-up step, so it never cleared at all.
+    formMethods?.setValue?.(fieldName, value, { shouldValidate: true });
     const orcid = value.trim().replace(getOrcidReplaceText(), '').match(/^\d{4}-?\d{4}-?\d{4}-?\d{3}[0-9X]$/);
     if (orcid) {
       setSearchMode('lookup');
@@ -518,6 +552,16 @@ export default function ORCIDLookup({
     }
     if (mode === 'validation-only') {
       setResolvedName(null);
+      // RAID-861: derive the sibling schemaUri field from the recognised
+      // identifier shape - only when a type is definitively recognised,
+      // mirroring RAID-800's "only set when truthy" precedent.
+      const identifierType = detectContributorIdentifierType(value);
+      const schemaUriFieldName = fieldName.replace(/\.id$/, '.schemaUri');
+      if (identifierType === 'isni') {
+        formMethods?.setValue?.(schemaUriFieldName, ISNI_SCHEMA_URI, { shouldValidate: true });
+      } else if (identifierType === 'orcid') {
+        formMethods?.setValue?.(schemaUriFieldName, getContributorSchemaUri(), { shouldValidate: true });
+      }
     }
   };
 
@@ -622,6 +666,12 @@ const selectOrcid = (item: OrcidData | SearchPerson) => {
   setOrcidDetails?.(item);
   updateContributorNamesCache(orcidName);
 }
+  // RAID-861: ISNI is a plain, lighter identifier field - no lookup, no name
+  // resolution, no search. Only relevant in validation-only mode (the only
+  // mode contributor identifiers use).
+  const detectedType = mode === 'validation-only' ? detectContributorIdentifierType(searchValue) : 'unrecognised';
+  const isIsni = detectedType === 'isni';
+
   const _errors = formMethods?.formState?.errors as Record<string, unknown> | undefined;
   const helperTextError = Array.isArray((_errors as Record<string, any>)?.contributor) && !!((_errors as Record<string, any>)[path.name]?.message) ?
   (orcid.helpText || "Enter a valid ORCID iD e.g. 0000-0002-1825-0097 or free text to search") : '';
@@ -631,7 +681,7 @@ const selectOrcid = (item: OrcidData | SearchPerson) => {
       <Paper elevation={0} sx={{ p: 1, borderRadius: 2 }}>
         {mode === 'validation-only' && (
           <Typography variant="subtitle2" gutterBottom>
-            Name: {resolvedName ?? '—'}
+            {isIsni ? 'The entered ID is an ISNI' : `Name: ${resolvedName ?? '—'}`}
           </Typography>
         )}
         <Paper
@@ -662,7 +712,7 @@ const selectOrcid = (item: OrcidData | SearchPerson) => {
             />
           )}
           {<span style={{ height: "40px", margin:"-1px", marginRight:"8px" }} ref={inputRef}></span>}
-          {currentConfig.icon}
+          {isIsni ? <BadgeIcon /> : currentConfig.icon}
           <InputBase
             name={fieldName}
             sx={{ ml: 1, flex: 1 }}
@@ -678,6 +728,7 @@ const selectOrcid = (item: OrcidData | SearchPerson) => {
           />
           {searchText && (
             <CloseRoundedIcon
+              aria-label="clear identifier"
               onClick={() => {
                 clearSearchText(false);
                 formMethods?.setValue?.(fieldName, '');
@@ -686,28 +737,42 @@ const selectOrcid = (item: OrcidData | SearchPerson) => {
                 setResults(null);
                 setCachedResult(false);
                 setError(null);
+                if (mode === 'validation-only') {
+                  setResolvedName(null);
+                  // RAID-861: clearing the field must also reset schemaUri -
+                  // otherwise it can be left stuck at ISNI's schema URI (or a
+                  // stale ORCID one) with an empty id, an inconsistent state
+                  // that would still pass validation.
+                  formMethods?.setValue?.(fieldName.replace(/\.id$/, '.schemaUri'), getContributorSchemaUri(), { shouldValidate: true });
+                }
               }}
             />
           )}
           <Divider sx={{ height: 28, m: 0.5 }} orientation="vertical" />
-          <IconButton onClick={(e) => handleSearch(e)} color="primary" sx={{ p: '10px' }} aria-label="directions">
-            {(isLoading && !cachedResult) ? <ClipLoader color="#36a5dd" size={25}/> : verifiedORCID ? <CircleCheckBig color='green'/> : <ScanSearch />}
-          </IconButton>
+          {isIsni ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: '10px' }}>
+              <CircleCheckBig color="green" />
+            </Box>
+          ) : (
+            <IconButton onClick={(e) => handleSearch(e)} color="primary" sx={{ p: '10px' }} aria-label="directions">
+              {(isLoading && !cachedResult) ? <ClipLoader color="#36a5dd" size={25}/> : verifiedORCID ? <CircleCheckBig color='green'/> : <ScanSearch />}
+            </IconButton>
+          )}
         </Paper>
         {searchMode === 'lookup' && <FormHelperText sx={{ fontSize: '0.875rem', color: 'error.main', mr: 1 }}>{helperTextError}</FormHelperText>}
         {mode === 'validation-only' && error && (
           <FormHelperText sx={{ fontSize: '0.875rem', color: 'error.main', mr: 1 }}>{error}</FormHelperText>
         )}
-        <Box sx={{mt: 1, mb: 1, display: 'flex', alignItems: 'center', width: '400px', justifyContent: 'space-between' }}>
+        <Box sx={{mt: 1, mb: 1, display: 'flex', alignItems: 'center', width: '400px', justifyContent: 'space-between', minHeight: '50px' }}>
           <FormHelperText sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
             {mode === 'validation-only'
-              ? (orcid.helpText || 'Enter a valid ORCID iD, e.g. https://orcid.org/0000-0002-1825-0097')
+              ? (isIsni ? isniHelpText : (orcid.helpText || 'Enter a valid ORCID iD, e.g. https://orcid.org/0000-0002-1825-0097'))
               : searchConfig?.genericPlaceholder}
           </FormHelperText>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CustomStyledTooltip
-              title={"ORCID Lookup Info"}
-              content={searchConfig.tooltipContent}
+              title={isIsni ? isniTooltipTitle : "ORCID Lookup Info"}
+              content={isIsni ? isniTooltipContent : searchConfig.tooltipContent}
               variant="info"
               placement="top"
               tooltipIcon={<InfoOutlinedIcon />}
